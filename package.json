@@ -1,0 +1,70 @@
+{
+  "name": "nest-courier",
+  "version": "0.1.0",
+  "description": "Reliable outbound and inbound webhooks for NestJS: durable delivery, retries, HMAC and idempotency.",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepack": "npm run build",
+    "check": "npm run format:check && npm run typecheck && npm test && npm run build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "example:build": "tsc -p tsconfig.example.json",
+    "example:start": "node --env-file-if-exists=.env .example-build/examples/app.js",
+    "example": "npm run example:build && npm run example:start"
+  },
+  "keywords": [
+    "nestjs",
+    "webhook",
+    "hmac",
+    "retry",
+    "backoff",
+    "sqlite",
+    "idempotency"
+  ],
+  "peerDependencies": {
+    "@nestjs/common": "^11.0.0 || ^12.0.0",
+    "@nestjs/core": "^11.0.0 || ^12.0.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "dependencies": {
+    "ipaddr.js": "^2.2.0",
+    "undici": "^7.16.0"
+  },
+  "devDependencies": {
+    "@nestjs/common": "^11.1.0",
+    "@nestjs/core": "^11.1.0",
+    "@nestjs/platform-express": "^11.1.0",
+    "@nestjs/testing": "^11.1.0",
+    "@types/node": "^22.15.0",
+    "@vitest/coverage-v8": "^5.0.3",
+    "prettier": "^3.9.9",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
+  }
+}
