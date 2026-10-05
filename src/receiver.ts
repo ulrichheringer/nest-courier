@@ -1,6 +1,7 @@
 import {
   applyDecorators,
   CallHandler,
+  ForbiddenException,
   CanActivate,
   ExecutionContext,
   Inject,
@@ -13,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { from, lastValueFrom, Observable } from 'rxjs';
+import { matchesEvent } from './courier.service';
 import { CourierInboxService } from './inbox.service';
 import { Auth } from './types';
 import { safeEqual, verifyWebhook } from './signature';
@@ -22,6 +24,8 @@ export interface WebhookRequest {
 }
 export interface ReceiverOptions {
   secrets: string[];
+  /** Signed envelope types to accept; supports exact names, prefix.* and *. Omit to accept all. */
+  events?: string[];
   auth?: Auth;
   toleranceSeconds?: number;
   maxPayloadBytes?: number;
@@ -86,6 +90,21 @@ export class CourierWebhookGuard implements CanActivate {
       })
     )
       fail();
+    if (options.events !== undefined) {
+      let event: unknown;
+      try {
+        event = JSON.parse(request.rawBody!.toString('utf8'));
+      } catch {
+        throw new ForbiddenException('Webhook event is not accepted');
+      }
+      const type = event && typeof event === 'object' && 'type' in event ? event.type : undefined;
+      if (
+        typeof type !== 'string' ||
+        !type ||
+        !options.events.some((pattern) => matchesEvent(pattern, type))
+      )
+        throw new ForbiddenException('Webhook event is not accepted');
+    }
     request[VERIFIED] = options;
     return true;
   }

@@ -132,6 +132,7 @@ export class WebhooksController {
   @Post('orders')
   @WebhookReceiver(() => ({
     secrets: [process.env.WEBHOOK_SECRET!],
+    events: ['order.*'],
     auth: { type: 'bearer', token: process.env.WEBHOOK_TOKEN! },
     toleranceSeconds: 300,
     inbox: { namespace: 'orders-v1', ttlMs: 86_400_000 },
@@ -144,6 +145,8 @@ export class WebhooksController {
 ```
 
 O guard verifica autenticação e HMAC antes do handler. O interceptor reserva o ID da entrega na inbox e confirma o recibo somente após sucesso. Uma repetição já concluída retorna `{ received: true, duplicate: true }` sem executar o handler. Uma entrega ainda em processamento retorna HTTP 409; 409 faz parte da política padrão de retry do Courier.
+
+`events` é opcional: ausente aceita qualquer evento; configurado, aceita nomes exatos, prefixos `order.*` ou `*`, como subscriptions de envio. A comparação usa `type` do envelope JSON **assinado**, nunca o header informativo `x-courier-event`. Eventos não permitidos, ou corpos assinados sem `type` string, retornam HTTP 403 antes de reservar recibo na inbox ou chamar o handler. Uma lista vazia bloqueia todos os eventos. A autenticação e assinatura continuam obrigatórias e são verificadas antes do filtro.
 
 `secrets: [secretAtual, secretAnterior]` permite rotação. A função de configuração pode ser assíncrona e recebe `{ headers, rawBody }`, permitindo resolver segredos por tenant. `inbox: false` desativa apenas deduplicação. Defina namespaces estáveis e diferentes por consumidor/tenant; o padrão é `NomeDoController.nomeDoMetodo`.
 

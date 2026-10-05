@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Inject,
   INestApplication,
@@ -22,6 +23,7 @@ import {
 vi.mock('node:dns/promises', () => ({
   lookup: vi.fn(async () => [{ address: '127.0.0.1', family: 4 }]),
 }));
+let filteredCalls = 0;
 let calls = 0;
 let failOnce = false;
 @Controller('hooks')
@@ -42,6 +44,17 @@ class ReceiverController {
   })
   receiveApiKey() {
     return { received: true };
+  }
+
+  @Post('filtered')
+  @WebhookReceiver({
+    secrets: ['secret'],
+    events: ['order.*', 'invoice.paid'],
+    inbox: { namespace: 'filtered' },
+  })
+  receiveFiltered(@Body() event: { type: string }) {
+    filteredCalls++;
+    return { type: event.type };
   }
 
   @Post()
@@ -76,6 +89,7 @@ afterEach(async () => {
 });
 async function receiver() {
   calls = 0;
+  filteredCalls = 0;
   failOnce = false;
   const module = await Test.createTestingModule({
     imports: [CourierModule.forRoot({ worker: { enabled: false } })],
@@ -140,6 +154,37 @@ describe('NestJS receiver and real HTTP sender', () => {
         (await fetch(`${url}/${route}`, { method: 'POST', body, headers: signed(body) })).status,
       ).toBe(401);
     }
+  });
+  it('filters authenticated events by signed body before reserving the inbox receipt', async () => {
+    const url = `${await receiver()}/filtered`;
+    const send = (body: string, id: string, eventHeader?: string) =>
+      fetch(url, {
+        method: 'POST',
+        body,
+        headers: { ...signed(body, id), 'x-courier-event': eventHeader ?? 'untrusted' },
+      });
+    expect((await send('{"type":"order.created"}', 'one')).status).toBe(201);
+    expect((await send('{"type":"invoice.paid"}', 'two')).status).toBe(201);
+    expect((await send('{"type":"order"}', 'three', 'order.created')).status).toBe(403);
+    expect((await send('{"type":"invoice.failed"}', 'four', 'invoice.paid')).status).toBe(403);
+    expect((await send('{}', 'five', 'order.created')).status).toBe(403);
+    expect((await send('[]', 'six')).status).toBe(403);
+    const unsigned = '{"type":"order.ignored"}';
+    expect(
+      (
+        await fetch(url, {
+          method: 'POST',
+          body: unsigned,
+          headers: { ...signed(unsigned, 'seven'), 'x-courier-signature': 'invalid' },
+        })
+      ).status,
+    ).toBe(401);
+    expect((await send('{"type":"order.shipped"}', 'three')).status).toBe(201);
+    expect(await (await send('{"type":"order.shipped"}', 'three')).json()).toEqual({
+      received: true,
+      duplicate: true,
+    });
+    expect(filteredCalls).toBe(3);
   });
   it('delivers end to end and retries failed business handlers without premature deduplication', async () => {
     const url = await receiver();
